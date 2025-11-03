@@ -1,0 +1,254 @@
+using System;
+using System.IO;
+
+namespace DosyaSistemiSimulasyonu
+{
+    class FileRecord
+    {
+        public string Name { get; set; }
+        public int Size { get; set; }
+        public int StartBlock { get; set; }
+        public int EndBlock { get; set; }
+        public bool IsUsed { get; set; }
+    }
+
+    class Program
+    {
+        const int MAX_FILES = 100;
+        const int DISK_SIZE = 1000;
+
+        static FileRecord[] files = new FileRecord[MAX_FILES];
+        static int[] disk = new int[DISK_SIZE];
+
+        static void Main()
+        {
+            LoadFromFile();
+
+            int choice;
+            do
+            {
+                Console.WriteLine("\n========== DOSYA SISTEMI SIMULASYONU ==========");
+                Console.WriteLine("1. Yeni Dosya Olustur");
+                Console.WriteLine("2. Dosya Sil");
+                Console.WriteLine("3. Tum Dosyalari Listele");
+                Console.WriteLine("4. Bos Alan Goster");
+                Console.WriteLine("5. Cikis");
+                Console.Write("Seciminiz: ");
+
+                if (!int.TryParse(Console.ReadLine(), out choice))
+                {
+                    Console.WriteLine("Gecersiz secim!");
+                    continue;
+                }
+
+                switch (choice)
+                {
+                    case 1:
+                        CreateFile();
+                        break;
+                    case 2:
+                        DeleteFile();
+                        break;
+                    case 3:
+                        ListFiles();
+                        break;
+                    case 4:
+                        ShowFreeSpace();
+                        break;
+                    case 5:
+                        SaveToFile();
+                        Console.WriteLine("Cikis yapildi. Veriler 'disk.txt' dosyasina kaydedildi.");
+                        break;
+                    default:
+                        Console.WriteLine("Gecersiz secim!");
+                        break;
+                }
+
+            } while (choice != 5);
+        }
+
+        // Disk başlatma
+        static void InitializeDisk()
+        {
+            for (int i = 0; i < DISK_SIZE; i++)
+                disk[i] = 0;
+
+            for (int i = 0; i < MAX_FILES; i++)
+                files[i] = new FileRecord() { IsUsed = false };
+        }
+
+        // Disk.txt'den veri yükleme
+        static void LoadFromFile()
+        {
+            if (!File.Exists("disk.txt"))
+            {
+                InitializeDisk();
+                return;
+            }
+
+            string[] lines = File.ReadAllLines("disk.txt");
+            InitializeDisk();
+
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("#")) continue; // yorum satırı
+                string[] parts = line.Split(',');
+
+                if (parts.Length == 5)
+                {
+                    FileRecord f = new FileRecord()
+                    {
+                        Name = parts[0],
+                        Size = int.Parse(parts[1]),
+                        StartBlock = int.Parse(parts[2]),
+                        EndBlock = int.Parse(parts[3]),
+                        IsUsed = bool.Parse(parts[4])
+                    };
+
+                    for (int i = f.StartBlock; i <= f.EndBlock; i++)
+                        disk[i] = 1;
+
+                    for (int i = 0; i < MAX_FILES; i++)
+                    {
+                        if (files[i].IsUsed == false)
+                        {
+                            files[i] = f;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Disk.txt'ye veri kaydetme
+        static void SaveToFile()
+        {
+            using (StreamWriter sw = new StreamWriter("disk.txt"))
+            {
+                sw.WriteLine("# Ad, Boyut, Baslangic, Bitis, KullaniliyorMu");
+                foreach (var f in files)
+                {
+                    if (f != null && f.IsUsed)
+                    {
+                        sw.WriteLine($"{f.Name},{f.Size},{f.StartBlock},{f.EndBlock},{f.IsUsed}");
+                    }
+                }
+            }
+        }
+
+        // Boş blok bulma
+        static int FindFreeBlocks(int size)
+        {
+            int count = 0;
+            int start = -1;
+
+            for (int i = 0; i < DISK_SIZE; i++)
+            {
+                if (disk[i] == 0)
+                {
+                    if (count == 0)
+                        start = i;
+                    count++;
+
+                    if (count == size)
+                        return start;
+                }
+                else
+                    count = 0;
+            }
+
+            return -1; // yer yok
+        }
+
+        // Dosya oluşturma
+        static void CreateFile()
+        {
+            Console.Write("Dosya adi: ");
+            string name = Console.ReadLine();
+
+            Console.Write("Dosya boyutu (blok): ");
+            if (!int.TryParse(Console.ReadLine(), out int size))
+            {
+                Console.WriteLine("Gecersiz boyut!");
+                return;
+            }
+
+            int start = FindFreeBlocks(size);
+            if (start == -1)
+            {
+                Console.WriteLine("Yeterli bos alan yok!");
+                return;
+            }
+
+            for (int i = start; i < start + size; i++)
+                disk[i] = 1;
+
+            for (int i = 0; i < MAX_FILES; i++)
+            {
+                if (files[i] == null || !files[i].IsUsed)
+                {
+                    files[i] = new FileRecord()
+                    {
+                        Name = name,
+                        Size = size,
+                        StartBlock = start,
+                        EndBlock = start + size - 1,
+                        IsUsed = true
+                    };
+                    Console.WriteLine($"Dosya '{name}' olusturuldu. Bloklar [{start} - {start + size - 1}]");
+                    SaveToFile();
+                    return;
+                }
+            }
+
+            Console.WriteLine("Dosya tablosu dolu!");
+        }
+
+        // Dosya silme
+        static void DeleteFile()
+        {
+            Console.Write("Silinecek dosya adi: ");
+            string name = Console.ReadLine();
+
+            foreach (var f in files)
+            {
+                if (f != null && f.IsUsed && f.Name == name)
+                {
+                    for (int i = f.StartBlock; i <= f.EndBlock; i++)
+                        disk[i] = 0;
+
+                    f.IsUsed = false;
+                    Console.WriteLine($"Dosya '{name}' silindi.");
+                    SaveToFile();
+                    return;
+                }
+            }
+
+            Console.WriteLine("Dosya bulunamadi!");
+        }
+
+        // Dosyaları listeleme
+        static void ListFiles()
+        {
+            Console.WriteLine("\n--- Dosya Listesi ---");
+            foreach (var f in files)
+            {
+                if (f != null && f.IsUsed)
+                {
+                    Console.WriteLine($"Ad: {f.Name,-10} | Boyut: {f.Size,-3} | Bloklar: [{f.StartBlock} - {f.EndBlock}]");
+                }
+            }
+        }
+
+        // Boş alan gösterme
+        static void ShowFreeSpace()
+        {
+            int freeBlocks = 0;
+            foreach (int b in disk)
+                if (b == 0)
+                    freeBlocks++;
+
+            Console.WriteLine($"Bos blok sayisi: {freeBlocks} / {DISK_SIZE}");
+        }
+    }
+}
