@@ -1,2 +1,2 @@
 # Isletim_Sistemleri
-Dr. öğretim uyesi hasan serdarin isletim sistemleri dersi icin bu proje yapilmistir.
+Dr. öğretim Üyesi Hasan SERDAR' ın isletim sistemleri dersi icin bu proje yapilmistir.
